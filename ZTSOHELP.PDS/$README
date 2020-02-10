@@ -1,0 +1,53 @@
+zTSOHELP is an ISPF dialog that makes access to, and use of, TSO Help
+much easier.
+
+To install copy the ZTSOHELP member into a library in your SYSEXEC or
+SYSPROC allocations. More below on installation and customization.
+
+---------------------------------------------------------------------
+  Name:        zTSOHELP
+
+  Function:    Present the user with a table of available
+               TSO HELP pages from which the user may select
+               to browse.
+
+  Syntax:      %zTSOHELP help-command  /w  /t
+
+               help-command is optional and will position the
+               list at that command (or close to it)
+
+               /t will include notelines for imbeds
+
+               /w will generate a warning message for any
+               help entries that do not exist and thus were
+               not added to the table
+
+  Commands:    Locate cmd next
+               Only string
+               Refresh
+               RL    (repeat locate)
+               S command
+               SEt
+               Sort column order
+
+  Notes:       The Description field is scrollable when the cursor
+               is in the field. This is to support descriptions
+               greater than 53 characters if they exist.
+
+  Command Table:   It is recommended that an ISPF Command Table
+                   entry be created to make it faster to get to
+                   this application. This is a sample:
+
+                   Verb    TSOH
+                   Trunc:  0
+                   Action: SELECT CMD(%ZTSOHELP &ZPARM) NEWAPPL(ISR)
+                   Desc:   TSO Help ISPF Application
+
+  Dependency: Optional the HELP Data member to be created
+               using the sample data provided (find *custom*)
+
+               FSHelp (CBT Tape File 134) may be used (see *custom*)
+               - Get the July 2017 update which fixes an issue with
+                 )I records
+
+  Customizations:   Find *custom* below for site customizations
