@@ -1,5 +1,5 @@
 /* --------------------  REXX Program  ----------------------------- */
- ver = '3.8'
+ ver = '3.9'
 /* ------------------ DO NOT NUMBER IN ISPF ------------------------ *
  | Name:       zTSOHELP                                              |
  |                                                                   |
@@ -51,6 +51,8 @@
  | Author:     John P. Kalinich and Lionel B. Dyck                   |
  |                                                                   |
  | History:                                                          |
+ |             02/11/20 - V3.9                                       |
+ |                      - Change Tom Conley's Title                  |
  |             12/20/19 - V3.8                                       |
  |                      - Highlight key sections                     |
  |             04/01/19 - V3.7                                       |
@@ -1112,7 +1114,7 @@ field(se) var(zcmd) val(set)
    +  William J. Smith, Editor-in-chief
    +  John Kalinich, Copy Editor and Programmer
    +  Lionel B. Dyck, Assistant Editor and Austin Bureau Chief
-   +  Tom Conley,@Make IBM Great Again+Campaign Manager
+   +  Tom Conley,@Make ISPF Great Again+Campaign Manager
 +
 + \ \ (press%ENTER+to continue) \ \
 )PROC
