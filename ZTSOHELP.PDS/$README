@@ -29,6 +29,7 @@ SYSPROC allocations. More below on installation and customization.
                S command
                SEt
                Sort column order
+               History - display change history
 
   Notes:       The Description field is scrollable when the cursor
                is in the field. This is to support descriptions
