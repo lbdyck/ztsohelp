@@ -270,7 +270,7 @@
  |            to 1 to enable notifications for missing  |
  |                 help members                         |
  * ---------------------------------------------------- */
- notify = 1
+ notify = 0
  if warn = 1 then notify = 1
 
 /* ---------------------------------------------------------- *
