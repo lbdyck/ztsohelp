@@ -5,6 +5,15 @@ To install copy the ZTSOHELP member into a library in your SYSEXEC or
 SYSPROC allocations. More below on installation and customization.
 
 ---------------------------------------------------------------------
+
+Included with the ZTSOHELP package is member REXX, which is a TSO HELP
+member created by Bruce Koss, and packaged for TSO Help by John
+Kalinich, to provide help on various REXX functions and features.
+
+Then copy the member REXX into your HELP library (e.g. SYS1.HELP or
+your installation version of SYS1.HELP).
+
+---------------------------------------------------------------------
   Name:        zTSOHELP
 
   Function:    Present the user with a table of available
