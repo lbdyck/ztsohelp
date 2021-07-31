@@ -1,5 +1,5 @@
 /* --------------------  REXX Program  ----------------------------- */
- ver = '3.10'
+ ver = '3.13'
 /* ------------------ DO NOT NUMBER IN ISPF ------------------------ *
  | Name:       zTSOHELP                                              |
  |                                                                   |
@@ -43,17 +43,25 @@
  |             using the sample data provided (find *custom*)        |
  |                                                                   |
  |             FSHelp (CBT Tape File 134) may be used (see *custom*) |
- |             - Get the July 2017 update which fixes an issue with  |
- |               )I records                                          |
+ |                                                                   |
+ |             - July 2017 update:   fixes an issue with )I records  |
+ |             - August 2018 update: stops sequence number clearing  |
+ |               if data in positions 73-80 (EX MXI)                 |
  |                                                                   |
  | Customizations:  Find *custom* below for site customizations      |
  |                                                                   |
  | Author:     John P. Kalinich and Lionel B. Dyck                   |
+ |             The ISPF Cabal - Vive la r√©volution                   |
  |                                                                   |
  | History:                                                          |
+ |             07/29/21 - V3.13                                      |
+ |                      - Add HISTORY command (JK)                   |
+ |             07/28/21 - V3.12                                      |
+ |                      - Add REXX command to the help entries (JK)  |
+ |             10/20/20 - V3.11                                      |
+ |                      - Add JULIAN command to the help entries     |
  |             05/23/20 - V3.10                                      |
  |                      - Correct )X Syntax display                  |
- |                      - Remove action bar from view panel          |
  |             02/11/20 - V3.9                                       |
  |                      - Add more help entries                      |
  |             12/20/19 - V3.8                                       |
@@ -70,6 +78,8 @@
  |             10/30/17 - V3.3                                       |
  |                      - Change Include Help record to Noteline     |
  |                      - Add /t switch                              |
+ |                      - Add BookMangler SHELF command              |
+ |                      - Add Xclude line command                    |
  |             10/27/17 - V3.2                                       |
  |                      - Correction to eliminate blank lines after  |
  |                        )) records                                 |
@@ -101,7 +111,7 @@
  |                      - Added several additional help members      |
  |                      - Add LOCAL group of help entries            |
  |             07/20/17 - V2.1                                       |
- |                      - Minor Panel header chagnes for clarity     |
+ |                      - Minor Panel header changes for clarity     |
  |             07/20/17 - V2.0                                       |
  |                      - Several enhancements and expanded tutorial |
  |                      - Make the description field scrollable      |
@@ -139,7 +149,7 @@
  |                      - General availability                       |
  |             06/30/17 - Numerous changes (including name)          |
  |             06/22/17 - Creation                                   |
- | ----------------------------------------------------------------- |
+ * ----------------------------------------------------------------- |
  | Notes:  1. Additions to the list of TSO Help members is easy by   |
  |            just adding them to the table at the end of this       |
  |            code.                                                  |
@@ -260,7 +270,7 @@
  |            to 1 to enable notifications for missing  |
  |                 help members                         |
  * ---------------------------------------------------- */
- notify = 0
+ notify = 1
  if warn = 1 then notify = 1
 
 /* ---------------------------------------------------------- *
@@ -368,6 +378,11 @@
        end
 
     if datatype(row) /= 'NUM' then row = 0
+    if zsel = 'X' then do
+      ssel = zsel
+      "TBDELETE" ztsohtbl
+      zsel = ssel
+      end
     if row /= 0 then do
       ssel = zsel
       "TBTOP" ztsohtbl
@@ -385,6 +400,10 @@
                 end
              else call do_locate srchtsoh 'Next'
              end
+        When abbrev("HISTORY",translate(word(zcmd,1)),1) = 1 then do
+          zcmd = ''
+          call do_history
+          end
         When abbrev('S',translate(word(zcmd,1)),1) = 1 then do
              parse value zcmd with x tsocmd
              if tsocmd = null then do
@@ -392,12 +411,16 @@
                 lmsg = 'Select requires a TSO Help member name.'
                 'Setmsg msg(ztso001)'
                 end
-             else call do_it
+             else do
+                  tsocomp = ''
+                  call do_it
+                  end
              end
         When abbrev('LOCATE',translate(word(zcmd,1)),1) = 1 |,
           abbrev('FIND',translate(word(zcmd,1)),1) = 1 then
           call do_locate subword(zcmd,2)
-        When abbrev('ONLY',translate(word(zcmd,1)),1) = 1 then do
+        When abbrev('ONLY',translate(word(zcmd,1)),1) = 1 |,
+          abbrev('ALL',translate(word(zcmd,1)),3) = 1 then do
           parse value zcmd with x string
           string = translate(string)
           'tbtop' ztsohtbl
@@ -481,7 +504,7 @@
         end
       end
     end
-    if zsel /= null then
+    if (zsel /= null) & (zsel /= 'X') then
     call do_it
   end
 
@@ -591,6 +614,10 @@ build_list:
       tsocomp = substr(tsocmd,1,colonm1)
       iterate
     end
+    if tsocomp = 'SHELF' then do
+      'tbadd' ztsohtbl 'order'
+      iterate
+      end
     'LMMFind Dataid('status') member('tsocmd')'
     if rc <> 0 then do
       nohelp = nohelp||left(tsocmd,9)
@@ -619,6 +646,11 @@ build_list:
  | Now display the Help page |
  * ------------------------ */
 Do_It:
+  if tsocomp = 'SHELF' then do
+    Address TSO
+    "%bookmgr shelf('eoybook."tsocmd".bkshelf')"
+    return
+    end
   Address ISPExec
   'Control Display Save'
   if fshelp = 0
@@ -648,12 +680,61 @@ View_it:
  'lmcopy fromid('status') todataid('thd') frommem('tsocmd')'
  ztsohtit = 'TSO Help:' tsocmd
  'vput (ztsohtit)'
- 'view dataid('thd') member('tsocmd') macro(ztsohm)' ,
+ 'view dataid('thd') member('tsocmd') macro('ztsohm')' ,
     'panel(ztsohed) ChgWarn(no)'
  'lmfree dataid('thd')'
  Address TSO 'Free f('thdd')'
  "LMInit Dataid(status) DDname(SYSHELP) ENQ(SHR)"
  Return
+
+  /* --------------------------------- *
+  | History routine                   |
+  * --------------------------------- */
+do_history:
+  hist. = ''
+  hist.1 = 'ZTSOHELP Change History'
+  hist.2 = ' '
+  line = 1
+  x = sourceline(line)
+  do until pos(' | History:',x) > 0
+    line = line + 1
+    x = sourceline(line)
+    iterate
+  end
+  tail = 3
+  do until pos(' * ----',x) > 0
+    parse value x with '|' hist.tail '|'
+    line = line + 1
+    tail = tail + 1
+    x = sourceline(line)
+  end
+  hist.0 = tail - 1
+  call do_view_stem hist
+  drop hist.
+  return
+
+  /* --------------------------------- *
+  | ISPF View Stem routine            |
+  * --------------------------------- */
+do_view_stem:
+  parse arg stem
+  Address TSO
+  'alloc f('dd') unit(vio) new reuse space(1,1) tracks',
+    'lrecl(80) recfm(f b) blksize(0) dsorg(ps)'
+  'execio * diskw' dd '(finis stem' stem'.'
+
+  Address ISPExec
+  'lminit dataid(id) ddname('dd') enq(exclu)'
+  if rc /= 0 then do
+    zedsmsg = 'Error'
+    zedlmsg = 'Error.  LMINIT failed for VIO output file'
+    'setmsg msg(isrz001)'
+    exit
+  end
+  'view   dataid('id')'
+  'lmfree dataid('id')'
+  Address TSO 'free f('dd')'
+  return
 
 /* --------------------  rexx procedure  -------------------- *
  * Name:      LoadISPF                                        *
@@ -974,7 +1055,8 @@ View_it:
    02 type(output) intens(high) skip(on) color(&pclrc)
    03 type(output) intens(high) skip(on) color(&pclrd)
    ? type(output) intens(low ) caps(off) just(asis ) color(white)
-   $ type(text) intens(high) hilite(reverse)
+   ~ type(text) intens(high) color(turq)
+   $ type(text) intens(high)
    % type(text) intens(high) skip(on)
    + type(text) intens(low) skip(on)
    # type(output) intens(high) caps(off) just(left)
@@ -986,14 +1068,13 @@ View_it:
    06 type(output) intens(high) caps(off) just(left)
      pas(on) skip(on) hilite(uscore) color(&pclrd)
 )Body  Expand(\\) Width(&zscreenw)
-%\-\ $TSO Help Pages?viewfs  $- &ver%\-\
+~zTSOHELP¬Æ?ver $           TSO Help Pages?viewfs  +
 %Command ===>_zcmd                                 \ \%Scroll ===>_amt +
 %
-+Command: %L cmd+- Locate #RL+- Repeat Locate %O str+- Only        #R+- Refresh
-+         %S cmd+- Select #SE+- Set Viewer    %SOrt col A/D+- Sort
-+Line:    %S+-Select+
++Command: %L cmd+-Locate #RL+- Repeat Locate %Only string +- Only #R+- Refresh
++         %S cmd+-Select #SE+- Set Viewer    %SOrt col A/D+- Sort #H+- History
 +
-%Sel+út1     + 	t2       +Üt3         +
+%   +¬út1     + 	t2       +¬Üt3         +
 )Model
 !z+  z          z       z
 )Init
@@ -1006,6 +1087,7 @@ View_it:
  &RL      = 'RL'
  &R       = 'R'
  &SE      = 'SE'
+ &H       = 'H'
  &t1      = 'Command'
  &t2      = 'Component'
  &T3      = 'Description'
@@ -1013,7 +1095,7 @@ View_it:
 )Proc
 if (&zsel = _)
     &zsel = &z
-ver (&zsel,list,S,'=')
+ver (&zsel,list,S,'=',X)
 if (&ztdsels = 0000)
    &row = .csrrow
    if (&row ^= 0)
@@ -1055,6 +1137,7 @@ field(t3) var(zcmd) val(desc)
 field(r)  var(zcmd) val(Refresh)
 field(rl) var(zcmd) val(RL)
 field(se) var(zcmd) val(set)
+field(h)  var(zcmd) val(history)
 */
 )End
 >Panel #ztsoh1
@@ -1065,27 +1148,27 @@ field(se) var(zcmd) val(set)
    @   TYPE(TEXT)  INTENS(HIGH) SKIP(ON) HILITE(USCORE) COLOR(BLUE)
    _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
 )BODY EXPAND(\\)
-%Tutorial+\-\(%zTSOHELP+)\-\%Tutorial
+%Tutorial+\-\(%TSOHELP+)\-\%Tutorial
 %Command ===>_ZCMD
 +
-+ This table lists some of the documented TSO commands.
-+
-+Commands:
-   % Locate cmd next  +Locate the requested command in the table
-   % Only string      +Remove all rows without string
-   %*Refresh          +Refresh the table after using ONLY
-   %*RL               +Repeat Locate
-   % S cmd            +Select the command
-   %*SEt              +Toggles between using ISPF View and FSHELP
-   % SOrt column order+Sort the table using the column name
-   +                   order is A or D (default is A)
-+
-+Line Selections: !(point-and-shoot field)+
++Primary Commands:
+  !*%History          +Display change history of zTSOHELP
+  %  Locate cmd next  +Locate the requested command in the table
+  %  Only string      +Remove all rows without string (ALL is alias)
+  !*%Refresh          +Refresh the table after using ONLY
+  !*%RL               +Repeat Locate
+  %  S cmd            +Select the command
+  !*%SEt              +Toggles between using ISPF View and FSHELP
+  %  SOrt column order+Sort table using the column name (order=A/D, default=A)
+  !*+                  Denotes point-and-shoot commands
++Line Commands:
 %    S+               +Select a command to be browsed under View or FSHelp
+%    X+               +Exclude a command from the list
+%    =+               +Repeat prior line command
 +
-%Note: +Column headers are point and shoot to sort. 1st use sort Ascending
-+        and 2nd use sort Descending, etc.
-+
++Column headers are point-and-shoot sortable.  1st shot = Sort Ascending,
++2nd shot = Sort Descending.
+  +
 + \ \ (press%ENTER+to continue) \ \
 )PROC
  &zcont = #ztsoh2
@@ -1098,35 +1181,36 @@ field(se) var(zcmd) val(set)
    @   TYPE(TEXT)  INTENS(HIGH) SKIP(ON) HILITE(USCORE) COLOR(BLUE)
    _   TYPE(INPUT) INTENS(HIGH) CAPS(ON) JUST(LEFT) HILITE(USCORE)
 )BODY EXPAND(\\)
-%Tutorial+\-\(%zTSOHELP+)\-\%Tutorial
+%Tutorial+\-\(%TSOHELP+)\-\%Tutorial
 %Command ===>_ZCMD
 +
-%Notes:+To use Tab key to access Point and Shoot fields the Tab to Point
-+       and Shoot must be selected in the ISPF Settings (ISPF Option 0).
+%Notes:+To use Tab key to access Point and Shoot fields the
++       Tab to Point and Shoot must be selected in the ISPF
++       Settings (ISPF Option 0).
 +
-+      +Use%Only+to limit the display to a specific string to more easily
-+       find the command you need.
++      +Use%Only+to limit the display to a specific string
++       to more easily find the command you need.
 +
-+       The description field is scrollable. Use Right and Left keys with
-+       the cursor in a description field.
++       The description field is scrollable. Use Right and Left
++       keys with the cursor in a description field.
 +
-+     %*+Point and shoot commands. Set value saved in ISPF Profile.
++The list was generated by:
 +
- +The list was generated by: %"The Project to Document TSO Commands".
+%"The Project to Document TSO Commands".+
 +
    +  William J. Smith, Editor-in-chief
    +  John Kalinich, Copy Editor and Programmer
    +  Lionel B. Dyck, Assistant Editor and Austin Bureau Chief
    +  Tom Conley,@Make ISPF Great Again+Campaign Manager
 +
-+ \ \ (press%ENTER+to continue) \ \
 )PROC
- &zup = #ztsoh1
+ &zup   = #ztsoh1
 )END
 >Panel ztsohed
 /*
 )PANEL KEYLIST(ISRSPEC,ISR)
-)ATTR DEFAULT(àâ) FORMAT(MIX)            /* ISREDDE2 - ENGLISH - 7.1 */
+)ATTR DEFAULT(¬à¬â) FORMAT(MIX)            /* ISREDDE2 - ENGLISH - 7.1 */
+ 15 TYPE(AB)
  2A TYPE(ABSL) GE(ON)
  2B TYPE(PT)
  2F TYPE(FP)
@@ -1171,10 +1255,140 @@ field(se) var(zcmd) val(set)
  D  TYPE(CHAR) COLOR(&ZCD) HILITE(&ZHD)
  F  TYPE(CHAR) COLOR(&ZCF) HILITE(&ZHF)
  S  TYPE(CHAR) COLOR(&ZCS) HILITE(&ZHS)
- ‹  TYPE(NEF) CAPS(ON) PADC(USER)
+ √ú  TYPE(NEF) CAPS(ON) PADC(USER)
+)ABC DESC('File') MNEM(1)
+PDC DESC('Save') UNAVAIL(ZEDF) MNEM(1) ACTION RUN(>SAVE)
+PDC DESC('Cancel') MNEM(1) ACTION RUN(CANCEL)
+PDC DESC('Exit') MNEM(1) ACTION RUN(END)
+)ABCINIT
+.ZVARS=EDITFILE
+   IF (&ZVMODET = 'VIEW') &zedf = 1
+   ELSE                   &zedf = 0
+)ABC DESC('Edit') MNEM(1)
+PDC DESC('Reset') MNEM(1) ACTION RUN(>RESET)
+PDC DESC('Undo') MNEM(1) ACTION RUN(>UNDO)
+PDC DESC('Hilite') UNAVAIL(ZEDE) MNEM(1) ACTION RUN(>HI)
+PDC DESC('Cut') MNEM(1) ACTION RUN(>CUT)
+PDC DESC('Paste') MNEM(1) ACTION RUN(>PASTE)
+)ABCINIT
+.ZVARS=EDITEDIT
+   IF (&ZEDHI ^= 'YES')  &zede = 1
+   ELSE &zede = 0
+)ABC DESC('Edit_Settings') MNEM(2)
+PDC DESC('Edit settings') MNEM(1) ACTION RUN(>EDSET)
+)ABCINIT
+.ZVARS=PDFCFM
+)ABC DESC('Menu') MNEM(1)
+PDC DESC('Settings') UNAVAIL(ZPM1) MNEM(1) ACC(CTRL+S)
+ ACTION RUN(ISRROUTE) PARM('SET')
+PDC DESC('View') UNAVAIL(ZPM2) MNEM(1) ACC(CTRL+V)
+ ACTION RUN(ISRROUTE) PARM('BR1')
+PDC DESC('Edit') UNAVAIL(ZPM3) MNEM(1) ACC(CTRL+E)
+ ACTION RUN(ISRROUTE) PARM('ED1')
+PDC DESC('ISPF Command Shell') UNAVAIL(ZPM4) MNEM(6) ACC(CTRL+C)
+ ACTION RUN(ISRROUTE) PARM('C1')
+PDC DESC('Dialog Test...') UNAVAIL(ZPM5) MNEM(8) ACC(CTRL+T)
+ ACTION RUN(ISRROUTE) PARM('DAL')
+PDC DESC('Other IBM Products...') UNAVAIL(ZPM6) MNEM(1) ACC(CTRL+O)
+ ACTION RUN(ISRROUTE) PARM('OIB')
+PDC DESC('SCLM') UNAVAIL(ZPM7) MNEM(3) ACC(CTRL+L)
+ ACTION RUN(ISRROUTE) PARM('SCL')
+PDC DESC('ISPF Workplace') UNAVAIL(ZPM8) MNEM(6) ACC(CTRL+W)
+ ACTION RUN(ISRROUTE) PARM('WRK')
+PDC DESC('Status Area...') UNAVAIL(ZPMS) MNEM(8) ACC(CTRL+A)
+ ACTION RUN(ISRROUTE) PARM('SAM')
+PDC DESC('Exit') MNEM(2) PDSEP(ON) ACC(CTRL+X) ACTION RUN(EXIT)
+)ABCINIT
+.ZVARS=ISR@OPT
+)ABC DESC('Utilities') MNEM(1)
+PDC DESC('Library') UNAVAIL(ZUT1) MNEM(1) ACC(ALT+1)
+ ACTION RUN(ISRROUTE) PARM('U1')
+PDC DESC('Data set') UNAVAIL(ZUT2) MNEM(1) ACC(ALT+2)
+ ACTION RUN(ISRROUTE) PARM('U2')
+PDC DESC('Move/Copy') UNAVAIL(ZUT3) MNEM(1) ACC(ALT+3)
+ ACTION RUN(ISRROUTE) PARM('U3')
+PDC DESC('Data Set List') UNAVAIL(ZUT4) MNEM(2) ACC(ALT+4)
+ ACTION RUN(ISRROUTE) PARM('U4')
+PDC DESC('Reset Statistics') UNAVAIL(ZUT5) MNEM(5) ACC(ALT+5)
+ ACTION RUN(ISRROUTE) PARM('U5')
+PDC DESC('Hardcopy') UNAVAIL(ZUT6) MNEM(1) ACC(ALT+6)
+ ACTION RUN(ISRROUTE) PARM('U6')
+PDC DESC('Download...') UNAVAIL(ZUTDT) MNEM(2) ACC(ALT+7)
+ ACTION RUN(ISRROUTE) PARM('UDT')
+PDC DESC('Outlist') UNAVAIL(ZUT7) MNEM(2) ACC(ALT+8)
+ ACTION RUN(ISRROUTE) PARM('U8')
+PDC DESC('Commands...') UNAVAIL(ZUT8) MNEM(1) ACC(ALT+9)
+ ACTION RUN(ISRROUTE) PARM('U9')
+PDC DESC('Reserved') UNAVAIL(ZUT9) MNEM(6) ACTION RUN(ISRROUTE) PARM('U10')
+PDC DESC('Format') UNAVAIL(ZUT10) MNEM(1) ACC(ALT+F1)
+ ACTION RUN(ISRROUTE) PARM('U11')
+PDC DESC('SuperC') UNAVAIL(ZUT11) MNEM(1) PDSEP(ON) ACC(CTRL+F2)
+ ACTION RUN(ISRROUTE) PARM('U12')
+PDC DESC('SuperCE') UNAVAIL(ZUT12) MNEM(3) ACC(CTRL+F3)
+ ACTION RUN(ISRROUTE) PARM('U13')
+PDC DESC('Search-For') UNAVAIL(ZUT13) MNEM(2) ACC(CTRL+F4)
+ ACTION RUN(ISRROUTE) PARM('U14')
+PDC DESC('Search-ForE') UNAVAIL(ZUT14) MNEM(4) ACC(CTRL+F5)
+ ACTION RUN(ISRROUTE) PARM('U15')
+PDC DESC('Table Utility') UNAVAIL(ZUT15) MNEM(3) ACC(CTRL+F6)
+ ACTION RUN(ISRROUTE) PARM('U16')
+PDC DESC('Directory List') UNAVAIL(ZUT16) MNEM(2) ACC(CTRL+F7)
+ ACTION RUN(ISRROUTE) PARM('U17')
+)ABCINIT
+.ZVARS=PDFUTIL
+     &zut9 = '1'
+)ABC DESC('Compilers') MNEM(1)
+PDC DESC('Foreground Compilers') MNEM(1) ACTION RUN(ISRROUTE) PARM('FGD')
+PDC DESC('Background Compilers') MNEM(1) ACTION RUN(ISRROUTE) PARM('BKG')
+PDC DESC('ISPPREP Panel Utility...') MNEM(1) ACTION RUN(ISPPREP)
+PDC DESC('DTL Compiler...') MNEM(1) ACTION RUN(ISPDTLC)
+)ABCINIT
+.ZVARS=ISRLANG
+)ABC DESC('Test') MNEM(1)
+PDC DESC('Functions...') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL1')
+PDC DESC('Panels...') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL2')
+PDC DESC('Variables...') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL3')
+PDC DESC('Tables...') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL4')
+PDC DESC('Log') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL5')
+PDC DESC('Services...') UNAVAIL(ZPM5) MNEM(1) ACTION RUN(ISRROUTE) PARM('DL6')
+PDC DESC('Traces...') UNAVAIL(ZPM5) MNEM(2) ACTION RUN(ISRROUTE) PARM('DL7')
+PDC DESC('Break Points...') UNAVAIL(ZPM5) MNEM(1)
+ ACTION RUN(ISRROUTE) PARM('DL8')
+PDC DESC('Dialog Test...') UNAVAIL(ZPM5) MNEM(1)
+ ACTION RUN(ISRROUTE) PARM('DAL')
+PDC DESC('Dialog Test appl ID...') MNEM(2) ACTION RUN(ISRROUTE) PARM('DAP')
+)ABCINIT
+.ZVARS=DIATEST
+)ABC DESC('Help') MNEM(1)
+PDC DESC('General') MNEM(1) ACTION RUN(TUTOR) PARM('ISR2A000')
+PDC DESC('Display screen format') MNEM(1) ACTION RUN(TUTOR) PARM('ISR2E000')
+PDC DESC('Scrolling data') MNEM(1) ACTION RUN(TUTOR) PARM('ISR2F000')
+PDC DESC('Sequence numbering') MNEM(2) ACTION RUN(TUTOR) PARM('ISR2G000')
+PDC DESC('Display modes') MNEM(2) ACTION RUN(TUTOR) PARM('ISR2H000')
+PDC DESC('Tabbing') MNEM(1) ACTION RUN(TUTOR) PARM('ISR2I000')
+PDC DESC('Automatic recovery') MNEM(1) ACTION RUN(TUTOR) PARM('ISR2J000')
+PDC DESC('Edit profiles') MNEM(6) ACTION RUN(TUTOR) PARM('ISR2K000')
+PDC DESC('Edit line commands') MNEM(6) ACTION RUN(TUTOR) PARM('ISR2L000')
+PDC DESC('Edit primary commands') MNEM(7) ACTION RUN(TUTOR) PARM('ISR2M000')
+PDC DESC('Labels and line ranges') MNEM(3) ACTION RUN(TUTOR) PARM('ISR2Q000')
+PDC DESC('Ending an edit session') MNEM(2) ACTION RUN(TUTOR) PARM('ISR2N000')
+PDC DESC('Appendices') MNEM(8) ACTION RUN(TUTOR) PARM('ISR00004')
+PDC DESC('Index') MNEM(5) ACTION RUN(TUTOR) PARM('ISR91000')
+)ABCINIT
+.ZVARS=EDMHELP
 )BODY  EXPAND(//) WIDTH(&ZWIDTH)  CMD(ZCMD)
-Z         Z/ /                                           ColumnsZ    Z    ù
-Command ===>èZ/ /                                            Scroll ===>‹Z   ù
+¬ù
+ File
+ Edit
+ Edit_Settings
+ Menu
+ Utilities
+ Compilers
+ Test
+ Help¬ù
+¬ä--/-/-------------------------------------------------------------------------
+Z         Z/ /                                           ColumnsZ    Z    ¬ù
+Command ===>¬èZ/ /                                            Scroll ===>√úZ   ¬ù
 ZDATA,ZSHADOW/ /                                                              
 / /                                                                           
 )INIT
@@ -1438,7 +1652,7 @@ ZTSO001 '&SMSG'
  '(data) = line' i
  if strip(data) = '' then do
    j = i + 1
-   if j > last then do
+   if j >= last then do
      'locate 0'
      exit 1
      end
@@ -1565,25 +1779,18 @@ Update_nb:
 /* keep the description to 53 characters to avoid truncation */
 /* Group LOCAL is for local help members */
 /* enclosed as a REXX comment to avoid REXX syntax errors
-LOCAL:
-JCL        Job and JES statement standards.
-IBMPREFX   IBM prefixes for MVS components
-TAPENUM    Calculate number of tapes used by a job.
-DCF:
-SCRIPT     Invoke SCRIPT/VS to format a document
 FREE:
+PDS        Swiss Army Knife of Utilities
+PDSEGEN    PDSE V2 Member Generations Dialog
+PGLITE     PDSE V2 Member Generations Dialog (Fast)
+ABE        A Better Editor
 ABEND      TSO help member for abend codes
-BLKSIZE    Suggested blocksizes for disk data sets.
 BLK3390    Disk block size optimizing
 CDSCB      Zap Format-1 DSCB
 COMPARE    Compare files
 CONCAT     Permits the dynamic concatenation of DSN or DDNAME
-CONCATDD   Permits the dynamic concatenation of DSN or DDNAME
-DECONCAT   Reverse concatenation of data sets.
 DEX        Hexadecimal calculator
 DSAT       Disk data set attributes display
-DSPRINDD   Create a dd statement for printing on a terminal.
-DSPRINT    Print on Terminal printers.
 DUDASD     Display DASD info similar to D U,DASD
 DVOL       Disk free space display
 EKKO       Issue a message using PUTLINE that can be trapped
@@ -1591,13 +1798,10 @@ FSE        Create or modify sequential data set or PDS member
 FSH        Full screen help
 FSHELP     Full screen help
 HEL        Full-screen help
+JULIAN     Convert date to/from Julian
 LISTSPC    List space/allocation information for a dataset
-LOCK       Lock a terminal.
-LPDS       PDS utility.
-MURPHY     Murphys law
+MURPHY     Murphy's law
 MXI        MVS eXtended Information
-PDS        Swiss Army Knife of Utilities
-PGLITE     PDSEGEN Lite
 PRINTOFF   Obtain hardcopy of dataset
 QLIST      Display a sequential data set or PDS member
 RELEASE    Free up unused space from an existing dataset
@@ -1623,11 +1827,10 @@ STEMEDIT   Browse/Edit/View REXX stem data
 STEMPULL   Retrieve REXX stem variables
 STEMPUSH   Share REXX stem variables across exec's
 STEPLIB    TSO Dynamic Steplib command
-SWRID      Switch to another RACF Userid (like unix su)
-TSOPRINT   Print a data set on high-speed Xerox by JES (no "*DJDE:").
-TSOXEROX   Print a data set on high-speed Xerox with "*DJDE:" controls.
 VSAMANAL   Determine the physical space a VSAM dataset requires
 VTOC       VTOC display
+VTOCUTIL   List and Alter Format-1 DSCB Information
+WHOSGOT    Display who is currently allocated to a specific dataset
 XEPHON     Index to articles that have appeared in MVS Update
 ZAP        Full-screen zap
 RACF:
@@ -1644,6 +1847,9 @@ DELUSER    Delete user profile
 LISTDSD    List data set profile
 LISTGRP    List group profile
 LISTUSER   List user profile
+OPERMIT    Unix Access Control List Management, like PERMIT
+ORALTER    Unix Security Attribute Management, like ALTER
+ORLIST     Unix File/Directory Security Info, like RLIST
 PASSWORD   Specify user password
 PERMIT     Maintain resource access lists
 RACDCERT   Manage RACF digital certificates
@@ -1651,34 +1857,8 @@ RACLINK    Administer user ID associations
 RACMAP     Create, delete, list, or query an identity filter
 RACPRIV    Set write-down privileges
 RALTER     Alter general resource profile
-RDADD      RACDCERT ADD (Add certificate)
-RDADDRIN   RACDCERT ADDRING (Add key ring)
-RDADDTOK   RACDCERT ADDTOKEN (Add token)
-RDALTER    RACDCERT ALTER (Alter certificate)
-RDALTMAP   RACDCERT ALTMAP (Alter mapping)
-RDBIND     RACDCERT BIND (Bind certificate to token)
-RDCHECKC   RACDCERT CHECKCERT (Check certificate or certificate chain)
-RDCONNEC   RACDCERT CONNECT (Connect a certificate to key ring)
-RDDELETE   RACDCERT DELETE (Delete certificate)
-RDDELMAP   RACDCERT DELMAP (Delete mapping)
-RDDELRIN   RACDCERT DELRING (Delete key ring)
-RDDELTOK   RACDCERT DELTOKEN (Delete token)
 RDEFINE    Define general resource profile
 RDELETE    Delete general resource profile
-RDEXPORT   RACDCERT EXPORT (Export certificate package)
-RDGENCER   RACDCERT GENCERT (Generate certificate)
-RDGENREQ   RACDCERT GENREQ (Generate request)
-RDIMPORT   RACDCERT IMPORT (Import certificate)
-RDLIST     RACDCERT LIST (List certificate)
-RDLISTCH   RACDCERT LISTCHAIN (List certificate chain)
-RDLISTMA   RACDCERT LISTMAP (List mapping)
-RDLISTRI   RACDCERT LISTRING (List key ring)
-RDLISTTO   RACDCERT LISTTOKEN (List token)
-RDMAP      RACDCERT MAP (Create mapping)
-RDREKEY    RACDCERT REKEY (Rekey certificate)
-RDREMOVE   RACDCERT REMOVE (Remove certificate from key ring)
-RDROLLOV   RACDCERT ROLLOVER (Rollover certificate)
-RDUNBIND   RACDCERT UNBIND (Unbind certificate from token)
 REMOVE     Remove user from group
 RLIST      List general resource profile
 RVARY      Change status of RACF database
@@ -1699,7 +1879,6 @@ EXECUTIL   Alter rexx environment
 FREE       Release a data set and/or an attribute list
 HELP       Invoke help processor
 LINK       Invoke link prompter and linkage editor
-LIST       Display a data set.
 LISTALC    Display active data sets
 LISTBC     Display messages from operator/user
 LISTDS     Display data set attributes
@@ -1757,15 +1936,15 @@ ALTER      Alter attributes in catalog entries
 BLDINDEX   Build VSAM alternate indexes over a VSAM base cluster
 CREATE     Define library and volume entries
 DEFINE     Define user catalogs, clusters, alt indexes, paths
-DEFCAT     A user catalog is to be defined.
-DEFSPACE   A data space is to be defined.
-DEFCL      A cluster is to be defined.
-DEFAIX     An alternateindex is to be defined.
-DEFPATH    A path is to be defined.
-DEFNVSAM   A NONVSAM data set is to be defined.
+DEFCAT     A user catalog is to be defined
+DEFSPACE   A data space is to be defined
+DEFCL      A cluster is to be defined
+DEFAIX     An alternateindex is to be defined
+DEFPATH    A path is to be defined
+DEFNVSAM   A NONVSAM data set is to be defined
 DEFALIAS   Define an alias for a usercat or NON-VSAM dataset
-DEFGDG     A generation data group entry is to be defined.
-DEFPGSPC   A page space entry is to be defined.
+DEFGDG     A generation data group entry is to be defined
+DEFPGSPC   A page space entry is to be defined
 DELETE     Delete VSAM objects or non-VSAM data sets
 DIAGNOSE   Scan VSAM Volume Data Set (VVDS) or ICF Catalog
 EXAMINE    Scan Index and/or Data components of VSAM KSDS
@@ -1868,7 +2047,63 @@ DRESTORE   Deferred Restore
 LISTDMS    List the Archive Index
 LISTREQ    List Status of Deferred Requests
 RESTORE    Immediate Restore
-REXXC:
-REXXC      REXX Compiler
-REXXL      REXX Compiler Link
+ACF2:
+ACF        Access Control Facility Security
+ACFCOMP    Compile and store a set of ACF2 rules
+ACFNRULE   Decompile, modify, compile, store a set of ACF2 rules
+ACFRULES   ACF2 dataset access rule syntax and semantics
+LIBR:
+LIBADD     Add a module to a LIBRARIAN master file
+LIBGET     Copy a LIBRARIAN module into a TSO data set
+LIBSAVE    Update a LIBRARIAN module from a previous LIBGET
+LIBDLM     Delete a module from a LIBRARIAN master file
+LIBINDEX   Index a programmer's LIBRARIAN modules
+LIBLIST    List information about a LIBRARIAN module
+LIBCTL     Lists all outstanding modules from previous LIBGET
+LIBEXP     Export a module to a LIBRARIAN master file
+REXX:
+REXX       Rexx language commands
+TCPIP:
+DIG        Query Name Servers
+FTP        File Transfer Protocol (FTP) command
+FREE:
+CPSCB      Change TSO user's PSCB (Protected Step Control Block)
+LPSCB      List TSO user's PSCB (Protected Step Control Block)
+LOCAL:
+RRGEN      RRGEN programming facility for System/360
+IBMPREFX   IBM prefixes for MVS components
+PDSEDIT    PDS batch edit program
+TESTUSER   User-written TEST subcommands (LBPTS, LG, and FIND)
+RACF:
+RDADD      RACDCERT ADD (Add certificate)
+RDADDRIN   RACDCERT ADDRING (Add key ring)
+RDADDTOK   RACDCERT ADDTOKEN (Add token)
+RDALTER    RACDCERT ALTER (Alter certificate)
+RDALTMAP   RACDCERT ALTMAP (Alter mapping)
+RDBIND     RACDCERT BIND (Bind certificate to token)
+RDCHECKC   RACDCERT CHECKCERT (Check certificate or certificate chain)
+RDCONNEC   RACDCERT CONNECT (Connect a certificate to key ring)
+RDDELETE   RACDCERT DELETE (Delete certificate)
+RDDELMAP   RACDCERT DELMAP (Delete mapping)
+RDDELRIN   RACDCERT DELRING (Delete key ring)
+RDDELTOK   RACDCERT DELTOKEN (Delete token)
+RDEXPORT   RACDCERT EXPORT (Export certificate package)
+RDGENCER   RACDCERT GENCERT (Generate certificate)
+RDGENREQ   RACDCERT GENREQ (Generate request)
+RDIMPORT   RACDCERT IMPORT (Import certificate)
+RDLIST     RACDCERT LIST (List certificate)
+RDLISTCH   RACDCERT LISTCHAIN (List certificate chain)
+RDLISTMA   RACDCERT LISTMAP (List mapping)
+RDLISTRI   RACDCERT LISTRING (List key ring)
+RDLISTTO   RACDCERT LISTTOKEN (List token)
+RDMAP      RACDCERT MAP (Create mapping)
+RDREKEY    RACDCERT REKEY (Rekey certificate)
+RDREMOVE   RACDCERT REMOVE (Remove certificate from key ring)
+RDROLLOV   RACDCERT ROLLOVER (Rollover certificate)
+RDUNBIND   RACDCERT UNBIND (Unbind certificate from token)
+SHELF:
+ASMSH030   HLASM for z/OS & z/VM & z/VSE R6 Bookshelf
+DZ9ZBK03   z/Architecture Principles of Operation Bookshelf
+DCF:
+SCRIPT     Invoke SCRIPT/VS to format a document
 >END */
