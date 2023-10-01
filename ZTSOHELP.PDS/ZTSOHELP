@@ -1,5 +1,5 @@
 /* --------------------  REXX Program  ----------------------------- */
- ver = '3.14'
+ ver = '3.15'
 /* ------------------ DO NOT NUMBER IN ISPF ------------------------ *
  | Name:       zTSOHELP                                              |
  |                                                                   |
@@ -54,6 +54,9 @@
  |             The ISPF Cabal - Vive la révolution                   |
  |                                                                   |
  | History:                                                          |
+ |             10/01/24 - V3.15                                      |
+ |                      - remove routine that removed records        |
+ |                        starting with ' *' not sure why            |
  |             07/31/21 - V3.14                                      |
  |                      - Add SubCommand search option               |
  |             07/29/21 - V3.13                                      |
@@ -1529,8 +1532,6 @@ ZTSO001 '&SMSG'
  | are not useful                                  |
  * ----------------------------------------------- */
   "change p'########' ' ' 73 80 all"
-  "Exclude '*' 2 all"
-  "Del x all"
 /* --------------------------------------- *
  | Now remove any duplicated blank records |
  * --------------------------------------- */
