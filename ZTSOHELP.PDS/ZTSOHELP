@@ -1,5 +1,5 @@
 /* --------------------  REXX Program  ----------------------------- */
- ver = '3.15'
+ ver = '3.16'
 /* ------------------ DO NOT NUMBER IN ISPF ------------------------ *
  | Name:       zTSOHELP                                              |
  |                                                                   |
@@ -54,6 +54,8 @@
  |             The ISPF Cabal - Vive la révolution                   |
  |                                                                   |
  | History:                                                          |
+ |             06/29/24 - V3.16                                      |
+ |                      - Add REXXVARS to the data                   |
  |             10/01/24 - V3.15                                      |
  |                      - remove routine that removed records        |
  |                        starting with ' *' not sure why            |
@@ -1713,6 +1715,7 @@ REVTSO     Doc for the RFE TSO option
 REVUNIX    Display Review subcommands when reviewing a USS file
 REVVSAM    Review a VSAM dataset
 REXXFORM   Reformat REXX Code
+REXXVARS   Browse/Edit/View REXX stem data
 RFE        Review front end
 SHA1SUM    Display the SHA-1 hash of data sets
 SHA2SUM    Display the SHA-256 hash of data sets
